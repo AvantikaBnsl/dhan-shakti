@@ -14,36 +14,8 @@ from langchain.document_loaders import PyPDFLoader
 from langchain import HuggingFaceHub
 from langchain.chains import ConversationalRetrievalChain
 
-from streamlit.server.server import Server
-import threading
-import time
-
-# Define Streamlit app
-def main():
-    st.write("Welcome to my Streamlit app!")
-
-# Custom CORS middleware
-def cors_middleware(self, handler):
-    def wrapped_app(environ, start_response):
-        # Add CORS headers to the response
-        def my_start_response(status, response_headers, exc_info=None):
-            response_headers.append(('Access-Control-Allow-Origin', '*'))
-            response_headers.append(('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'))
-            response_headers.append(('Access-Control-Allow-Headers', 'Origin, Content-Type'))
-            return start_response(status, response_headers, exc_info)
-        return handler(environ, my_start_response)
-    return wrapped_app
-
-# Replace Streamlit server's middleware with custom CORS middleware
-def run():
-    global main
-    server = Server.get_current()._server
-    server.app.wsgi_app = cors_middleware(server.app.wsgi_app)
-    main()
-
-# Start Streamlit app in a separate thread
-if _name_ == '_main_':
-    threading.Thread(target=run).start()
+# Set page title and icon
+st.set_page_config(page_title='Dhanshakti by SPQR', page_icon=':sparkles:')
 
 # Function to translate and speak
 def translate_and_speak(input_text, target_language):
@@ -59,6 +31,7 @@ def translate_and_speak(input_text, target_language):
     st.write('Translated Text:')
     st.write(translated.text)
 
+
 # Function for the chatbot
 def chatbot(question):
     if 'hello' in question.lower():
@@ -68,8 +41,16 @@ def chatbot(question):
     else:
         return "I'm sorry, I didn't understand your question."
 
+def process_pdf_question(question, docs):
+    # Process the question based on the PDF content
+    # For example, you can search for keywords in the PDF
+    # and return relevant information
+    for doc in docs:
+        if question.lower() in doc.text.lower():
+            return doc.text[:500]  # Return the first 500 characters of the matched text
+    return "I'm sorry, I couldn't find an answer in the PDF for your question."
+
     
-# Function to recognize speech and process the API
 def speech_recognition_and_api():
     # Initialize the speech recognizer
     recognizer = sr.Recognizer()
@@ -85,17 +66,18 @@ def speech_recognition_and_api():
             text = recognizer.recognize_google(audio_data, language="en-US")
             st.write("You said:", text)
 
+            # Translate the recognized text to English
+            translator = Translator()
+            translated_text = translator.translate(text, dest='en').text
+
             # Set up Hugging Face API token
             os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 
             # Load PDF document
-            url = "https://drive.google.com/file/d/1u3l219nhEDD9rRqoh_L4uiQUcln5ciYe/view?usp=drive_link"
             file =r"C:\Users\DELL\Desktop\finance.pdf"
-
             loader = PyPDFLoader(file)
-            #loader = PyPDFLoader(url)
             docs = loader.load()
-
+            
             # Split documents and create embeddings
             splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=128)
             split_docs = splitter.split_documents(docs)
@@ -112,14 +94,17 @@ def speech_recognition_and_api():
             )
 
             # Invoke the conversational retrieval chain
-            response = qa.invoke({"question": text, "chat_history": []})
+            response = qa.invoke({"question": translated_text, "chat_history": []})
+
+            # Translate the response back to Hindi
+            translated_response = translator.translate(response['answer'], dest='hi').text
 
             # Initialize pyttsx3 engine and speak the response
             engine = pyttsx3.init()
-            engine.say(response['answer'])
+            engine.say(translated_response)
             engine.runAndWait()
 
-            return text, response['answer']  # Return the recognized text and the AI's answer
+            return text, translated_response  # Return the recognized text and the translated response
 
         except sr.UnknownValueError:
             st.write("Google Speech Recognition could not understand audio.")
@@ -128,11 +113,7 @@ def speech_recognition_and_api():
         except sr.RequestError as e:
             st.write(f"Could not request results from Google Speech Recognition service; {e}")
     
-    
-    
-# Page layout
-st.title('DhanShakti by SPQR')
-st.subheader('Your Personal Assistant')
+
 
 # Logo and Title
 col1, col2, col3 = st.columns([1, 3, 1])
@@ -160,4 +141,25 @@ if input_mode == 'Text Input':
             # Translate the input text to Hindi
             translated_text = chatbot(question)
             
-            # Display
+            # Display the translated text
+            st.markdown("<hr style='margin-top: 20px; margin-bottom: 20px; border: 0; border-top: 1px solid #ffffff;'>", unsafe_allow_html=True)
+            st.markdown("<h3 style='text-align: left; color: #ffffff;'>Translated Text:</h3>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size: 16px; color: #ffffff;'>{translated_text}</p>", unsafe_allow_html=True)
+            
+            # Play audio if the translated text is available
+            if translated_text:
+                translate_and_speak(translated_text, 'hi')
+            else:
+                st.error("I'm sorry, I didn't understand your question.")
+
+elif input_mode == 'Voice Input':
+    if st.button('Start Recording'):
+        recognized_text, translated_response = speech_recognition_and_api()
+        st.write('Recognized Text:', recognized_text)
+
+    # Speak the translated response
+        if translated_response:
+            translate_and_speak(translated_response, 'hi')
+        else:
+            st.error("I'm sorry, I couldn't understand your question.")
+
