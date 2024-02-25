@@ -113,8 +113,9 @@ def speech_recognition_and_api():
         except sr.RequestError as e:
             st.write(f"Could not request results from Google Speech Recognition service; {e}")
     
-
-
+# Page layout
+st.title('DhanShakti by SPQR')
+st.subheader('Your Personal Assistant')
 # Logo and Title
 col1, col2, col3 = st.columns([1, 3, 1])
 with col1:
