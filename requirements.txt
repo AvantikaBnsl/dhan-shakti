@@ -5,5 +5,3 @@ pyttsx3
 Pillow
 SpeechRecognition
 langchain
-streamlit.server.server.Server
-threading
